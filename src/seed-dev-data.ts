@@ -1,5 +1,6 @@
 import { dataSource } from "../config/dataSource";
 import { CarbonEmissionFactor } from "./carbonEmissionFactor/carbonEmissionFactor.entity";
+import { FoodProductFootprint } from "./foodProductFootprint/foodProductFootprint.entity";
 
 export const TEST_CARBON_EMISSION_FACTORS = [
   {
@@ -71,14 +72,69 @@ export const getTestEmissionFactor = (name: string) => {
   return emissionFactor;
 };
 
+const TEST_PRODUCTS = [
+  {
+    name: "hamCheesePizza",
+    ingredients: [
+      { name: "ham", quantity: 0.1, unit: "kg" },
+      { name: "cheese", quantity: 0.15, unit: "kg" },
+      { name: "tomato", quantity: 0.4, unit: "kg" },
+      { name: "flour", quantity: 0.7, unit: "kg" },
+      { name: "oliveOil", quantity: 0.3, unit: "kg" },
+    ],
+  },
+  {
+    name: "blueCheeseSalad",
+    ingredients: [
+      { name: "blueCheese", quantity: 0.2, unit: "kg" },
+      { name: "vinegar", quantity: 0.05, unit: "kg" },
+      { name: "tomato", quantity: 0.3, unit: "kg" },
+    ],
+  },
+  {
+    name: "beefSteak",
+    ingredients: [
+      { name: "beef", quantity: 0.25, unit: "kg" },
+      { name: "oliveOil", quantity: 0.1, unit: "kg" },
+      { name: "tomato", quantity: 0.1, unit: "kg" },
+    ],
+  },
+];
+
 export const seedTestCarbonEmissionFactors = async () => {
   if (!dataSource.isInitialized) {
     await dataSource.initialize();
   }
-  const carbonEmissionFactorsService =
-    dataSource.getRepository(CarbonEmissionFactor);
 
-  await carbonEmissionFactorsService.save(TEST_CARBON_EMISSION_FACTORS);
+  const carbonEmissionFactorsRepo =
+    dataSource.getRepository(CarbonEmissionFactor);
+  await carbonEmissionFactorsRepo.save(TEST_CARBON_EMISSION_FACTORS);
+
+  const foodProductFootprintRepo =
+    dataSource.getRepository(FoodProductFootprint);
+
+  for (const product of TEST_PRODUCTS) {
+    let totalCarbonFootprint: number | null = 0;
+    for (const ingredient of product.ingredients) {
+      const factor = await carbonEmissionFactorsRepo.findOne({
+        where: { name: ingredient.name, unit: ingredient.unit },
+      });
+      if (!factor) {
+        totalCarbonFootprint = null;
+        break;
+      }
+      if (totalCarbonFootprint !== null) {
+        totalCarbonFootprint +=
+          ingredient.quantity * factor.emissionCO2eInKgPerUnit;
+      }
+    }
+
+    const footprint = foodProductFootprintRepo.create({
+      name: product.name,
+      totalCarbonFootprintKg: totalCarbonFootprint,
+    });
+    await foodProductFootprintRepo.save(footprint);
+  }
 };
 
 if (require.main === module) {
